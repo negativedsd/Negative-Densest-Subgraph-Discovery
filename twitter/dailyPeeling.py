@@ -167,7 +167,7 @@ def peeling(node_dict, total_degree, interaction_degree, edge_count_dict, fib_he
     return result
 
 
-def get_densest_subgraph(interactions=None, neg_value=1, C=1):
+def get_densest_subgraph(twitter_data_directory, interactions=None, neg_value=1, C=1):
     if interactions != None:
         interaction_list = interactions
     else:
@@ -184,10 +184,11 @@ def get_densest_subgraph(interactions=None, neg_value=1, C=1):
             if day < 10:
                 date_form += '0'
             date_form += str(day)
+            file_list = []
+            for interaction in interaction_list:
+                file_list.append(twitter_data_directory + interaction + date_form + '.txt')
             fib_heap, node_dict, total_degree, edge_count_dict = read_graph_file(
-                [interaction_list[0] + date_form + '.txt',
-                 interaction_list[1] + date_form + '.txt'],
-                interaction_list, enable_vector,
+                file_list, interaction_list, enable_vector,
                 interaction_degree, neg_value,
                 C, True)
             results[index][day] = peeling(node_dict, total_degree, interaction_degree, edge_count_dict, fib_heap)

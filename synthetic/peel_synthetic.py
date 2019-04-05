@@ -231,8 +231,8 @@ def queryWithDiffPlantSize(size1_list, size2_list, lambda1=1, lambda2=1, ratio=1
 # result2, node_dict2 = queryWithDiffLambdas(lambda1_list,lambda2_list, graph_file_path='good_C_graph.p', C=1)
 # print('Output size list used for plotting:', result2)
 
-print('Experiment with different lambda1 and lambda2')
-size1_list = [9, 12, 15, 20]
-size2_list = [9, 12, 15, 20]
-result3 = queryWithDiffPlantSize(size1_list, size2_list, lambda1=10, lambda2=1)
-print('Output size list used for plotting:', result3)
+# print('Experiment with different size1 and size2')
+# size1_list = [9, 12, 15, 20]
+# size2_list = [9, 12, 15, 20]
+# result3 = queryWithDiffPlantSize(size1_list, size2_list, lambda1=10, lambda2=1)
+# print('Output size list used for plotting:', result3)
