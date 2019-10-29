@@ -3,18 +3,16 @@ from lib.SimpleNode import SimpleNode
 import json
 
 
-def peeling(node_dict, total_C_degree, total_q_degree, fib_heap, q, lambda1, lambda2):
+def peeling(node_dict, total_C_degree, total_positive_degree, fib_heap, q, B, C, lambda1, lambda2):
     n = node_dict.__len__()
-    avg_degree = (float)(total_C_degree) / n
-    q_avg = total_q_degree / n
-    # outputs we want
-    max_C_avg = avg_degree
+    C_average_degree = float(total_C_degree) / n
+    positive_avg_degree = total_positive_degree / n
     S_size = n
-
+    subgraph = None
     for i in range(n - 1):
 
         if i % 50000 == 0:
-            print(i, max_C_avg, q_avg)
+            print(i, C_average_degree, positive_avg_degree, (C * positive_avg_degree - C_average_degree) / (B * q))
 
         # find min node from graph (remove from heap)
         node_to_remove = fib_heap.extract_min().value
@@ -22,40 +20,40 @@ def peeling(node_dict, total_C_degree, total_q_degree, fib_heap, q, lambda1, lam
 
             # get dictionary that has all edges between two nodes
             C_degree_loss = node_dict[node_to_remove].neighbor_dict[neighbor][0]
-            node_dict[neighbor].Cdegree -= C_degree_loss
-            q_degree_loss = node_dict[node_to_remove].neighbor_dict[neighbor][1]
-            node_dict[neighbor].qdegree -= q_degree_loss
+            node_dict[neighbor].C_degree -= C_degree_loss
+            pos_degree_loss = node_dict[node_to_remove].neighbor_dict[neighbor][1]
+            node_dict[neighbor].positive_degree -= pos_degree_loss
 
             # here the key can be actually increased
             if neighbor != node_to_remove:
-                fib_heap.decrease_key(node_dict[neighbor].fib_node, node_dict[neighbor].Cdegree)
+                fib_heap.decrease_key(node_dict[neighbor].fib_node, node_dict[neighbor].C_degree)
                 del node_dict[neighbor].neighbor_dict[node_to_remove]
             total_C_degree -= C_degree_loss
-            total_q_degree -= q_degree_loss
+            total_positive_degree -= pos_degree_loss
 
         del node_dict[node_to_remove]
-        avg_degree = (float)(total_C_degree) / (n - i - 1)
-        q_avg = total_q_degree / (n - i - 1)
+        C_average_degree = float(total_C_degree) / (n - i - 1)
+        positive_avg_degree = total_positive_degree / (n - i - 1)
         S_size = n - i - 1
-        if q_avg > q * lambda2 - lambda1:
-            if len(node_dict)<100:
-                print(list(node_dict))
-            return True, avg_degree, q_avg, S_size
+        if C_average_degree - (C - 1) * positive_avg_degree > q * lambda2 - lambda1:
+            if len(node_dict) < 30:
+                subgraph = list(node_dict)
+            return True, C_average_degree, positive_avg_degree, S_size, subgraph
 
-    return False, max_C_avg, q_avg, S_size
+    return False, C_average_degree, positive_avg_degree, S_size, subgraph
 
 
 class RiskNode:
     degree = None
     total_degree = None
     neighbor_dict = None
-    papercount = None
+    paper_count = None
 
     def __init__(self, n):
         self.degree = [0] * n
         self.neighbor_dict = {}
         self.total_degree = 0
-        self.papercount = 0
+        self.paper_count = 0
 
     #     type is int from 0 to len(degree)-1
     def increase_neighbor(self, name, type, degree):
@@ -86,11 +84,12 @@ def process_tmdb_file(file_path):
             actor_dict[relation['actors'][0]] = RiskNode(2)
         if relation['actors'][1] not in actor_dict:
             actor_dict[relation['actors'][1]] = RiskNode(2)
-        actor_dict[relation['actors'][0]].increase_neighbor(relation['actors'][1],0,weight)
-        actor_dict[relation['actors'][1]].increase_neighbor(relation['actors'][0],0,weight)
-        actor_dict[relation['actors'][0]].set_neighbor_risk(relation['actors'][1],-risk)
-        actor_dict[relation['actors'][1]].set_neighbor_risk(relation['actors'][0],-risk)
+        actor_dict[relation['actors'][0]].increase_neighbor(relation['actors'][1], 0, weight)
+        actor_dict[relation['actors'][1]].increase_neighbor(relation['actors'][0], 0, weight)
+        actor_dict[relation['actors'][0]].set_neighbor_risk(relation['actors'][1], -risk)
+        actor_dict[relation['actors'][1]].set_neighbor_risk(relation['actors'][0], -risk)
     return actor_dict
+
 
 def process_dblp_file(file_path):
     author_dict = {}
@@ -105,14 +104,15 @@ def process_dblp_file(file_path):
             author_dict[relation['actors'][0]] = RiskNode(2)
         if relation['actors'][1] not in author_dict:
             author_dict[relation['actors'][1]] = RiskNode(2)
-        author_dict[relation['actors'][0]].increase_neighbor(relation['actors'][1],0,weight)
-        author_dict[relation['actors'][1]].increase_neighbor(relation['actors'][0],0,weight)
-        author_dict[relation['actors'][0]].set_neighbor_risk(relation['actors'][1],-risk)
-        author_dict[relation['actors'][1]].set_neighbor_risk(relation['actors'][0],-risk)
+        author_dict[relation['actors'][0]].increase_neighbor(relation['actors'][1], 0, weight)
+        author_dict[relation['actors'][1]].increase_neighbor(relation['actors'][0], 0, weight)
+        author_dict[relation['actors'][0]].set_neighbor_risk(relation['actors'][1], -risk)
+        author_dict[relation['actors'][1]].set_neighbor_risk(relation['actors'][0], -risk)
     return author_dict
 
+
 def process_PPI_file(file_path):
-    author_dict = {}
+    protein_dict = {}
     relation_list = json.load(open(file_path))
     for relation in relation_list:
 
@@ -120,34 +120,47 @@ def process_PPI_file(file_path):
         risk = relation['weight'] * relation['possibility'] * (1 - relation['possibility'])
         if risk == 0:
             continue
-        if relation['protein'][0] not in author_dict:
-            author_dict[relation['protein'][0]] = RiskNode(2)
-        if relation['protein'][1] not in author_dict:
-            author_dict[relation['protein'][1]] = RiskNode(2)
-        author_dict[relation['protein'][0]].increase_neighbor(relation['protein'][1],0,weight)
-        author_dict[relation['protein'][1]].increase_neighbor(relation['protein'][0],0,weight)
-        author_dict[relation['protein'][0]].set_neighbor_risk(relation['protein'][1],-risk)
-        author_dict[relation['protein'][1]].set_neighbor_risk(relation['protein'][0],-risk)
-    return author_dict
+        if relation['protein'][0] not in protein_dict:
+            protein_dict[relation['protein'][0]] = RiskNode(2)
+        if relation['protein'][1] not in protein_dict:
+            protein_dict[relation['protein'][1]] = RiskNode(2)
+        protein_dict[relation['protein'][0]].increase_neighbor(relation['protein'][1], 0, weight)
+        protein_dict[relation['protein'][1]].increase_neighbor(relation['protein'][0], 0, weight)
+        protein_dict[relation['protein'][0]].set_neighbor_risk(relation['protein'][1], -risk)
+        protein_dict[relation['protein'][1]].set_neighbor_risk(relation['protein'][0], -risk)
+    return protein_dict
 
 
-def risk_averse_peel(uncertain_file='tmdb', filepath='../datasets/tmdb/tmdb_2017.json', precision=0.02):
-    # peeling preprocess for Tmdb
-    if uncertain_file == 'tmdb':
-        node_dict = process_tmdb_file(filepath)
+def process_ReIDC_file(file_path):
+    node_dict = {}
+    text_file = open(file_path)
+    line = text_file.readline()
+    while line:
+        possibility = line.split(" ")[2]
+        if possibility != '0.000000':
+            node1 = line.split(" ")[0]
+            node2 = line.split(" ")[1]
+            weight = float(possibility)
+            risk = float(possibility) * (1-float(possibility))
+            if node1 not in node_dict:
+                node_dict[node1] = RiskNode(2)
+            if node2 not in node_dict:
+                node_dict[node2] = RiskNode(2)
+            node_dict[node1].increase_neighbor(node2, 0, weight)
+            node_dict[node2].increase_neighbor(node1, 0, weight)
+            node_dict[node1].set_neighbor_risk(node2, -risk)
+            node_dict[node2].set_neighbor_risk(node1, -risk)
+        line = text_file.readline()
+    return node_dict
 
-    # peeling preprocess for DBLP
-    elif uncertain_file == 'dblp':
-        node_dict = process_dblp_file(filepath)
 
-    # peeling preprocess for PPI datasets
-    elif uncertain_file == 'ppi':
-        node_dict = process_PPI_file(filepath)
-
-    else:
-        assert Exception('uncertain dataset file type not expected!')
-
-    result = {'risk':{},'weight':{},'size':{}}
+def risk_averse_peel(node_dict, C_list, rho_list, B_list, precision=0.001):
+    result = {'risk': dict(), 'weight': dict(), 'size': dict(), 'subgraph': dict()}
+    for key in result:
+        for C in C_list:
+            result[key][C] = dict()
+            for rho in rho_list:
+                result[key][C][rho] = dict()
 
     pos_count = 0
     n = node_dict.__len__()
@@ -157,85 +170,117 @@ def risk_averse_peel(uncertain_file='tmdb', filepath='../datasets/tmdb/tmdb_2017
         for neighbor in node_dict[node].neighbor_dict.keys():
             #         if 0 in node_dict[node].neighbor_dict[neighbor]:
             pos_count += node_dict[node].neighbor_dict[neighbor][0]
-    rho_list = [0.5, 1, 2, 10]
-    C_list = [0.25,0.5,1,2,3,4,5,6]
-    for rho in rho_list:
-        print("!!!!!")
-        print("now we have rho as ", rho)
-        print("!!!!!!")
-        for C in C_list:
-            print("!!!!!")
-            print("now we have C as ", C)
-            print("!!!!!!")
-            lambda1 = rho * lambda2
-            lowbound = 0
-            upbound = 20
-            #  upbound = (pos_count + lambda1 * n) / lambda2
+    for B in B_list:
 
-            accerate_flag = True
-            while True:
-                #     peeling with edge = pos - q * neg, and find if there exist a subgraph whose density > q * lambda2 - lambda1
-                # first build fib heap based on q
-                if accerate_flag:
-                    q = lowbound + (upbound - lowbound) / 2
-                else:
-                    q = (upbound + lowbound) / 2
-                node_dict_q = {}
-                total_C_degree = 0
-                total_q_degree = 0
-                fib_heap = FibonacciHeap()
-                for node in node_dict.keys():
-                    node_dict_q[node] = SimpleNode()
-                    for neighbor in node_dict[node].neighbor_dict.keys():
-                        C_temp_degree_each = 0
-                        q_temp_degree_each = 0
-                        # here we already store disabled interactions as negative values
-                        C_temp_degree_each += node_dict[node].neighbor_dict[neighbor][1]
-                        q_temp_degree_each += q * node_dict[node].neighbor_dict[neighbor][1]
-                        C_temp_degree_each += C * node_dict[node].neighbor_dict[neighbor][0]
-                        q_temp_degree_each += node_dict[node].neighbor_dict[neighbor][0]
-                        node_dict_q[node].increase_neighbor(neighbor, C_temp_degree_each, q_temp_degree_each)
-                        # to avoid influence from loop
-                        if node == neighbor:
-                            total_C_degree += C_temp_degree_each
-                            total_q_degree += q_temp_degree_each
-                    node_dict_q[node].fib_node = fib_heap.insert(node_dict_q[node].Cdegree, node)
-                    total_C_degree += node_dict_q[node].Cdegree
-                    total_q_degree += node_dict_q[node].qdegree
-                #  print(total_C_degree, total_q_degree)
-                total_q_degree = total_q_degree / 2
-                total_C_degree = total_C_degree / 2
-                print(total_C_degree, total_q_degree)
-                exist_flag, max_avg, q_avg, S_size = peeling(node_dict_q, total_C_degree, total_q_degree, fib_heap, q,
-                                                             lambda1, lambda2)
-                print(q, exist_flag, max_avg, q_avg, S_size)
-                if exist_flag:
-                    if accerate_flag:
-                        accerate_flag = False
-                    if q - lowbound < precision and upbound - q < precision:
-                        weight = (max_avg-q_avg/q)/(C-1/q)
-                        risk = C*weight - max_avg
-                        print("~~~~~~~~~~~~~")
-                        print("rho, C, result q, corresponding (max density)subgraph's size, density, average risk:")
-                        print(rho, C, q, S_size, weight, risk)
-                        if C not in result['size']:
-                            result['size'][C] = {}
-                        result['size'][C][rho] = S_size
-                        if C not in result['risk']:
-                            result['risk'][C] = {}
-                        result['risk'][C][rho] = risk
-                        if C not in result['weight']:
-                            result['weight'][C] = {}
-                        result['weight'][C][rho] = weight
-                        print("~~~~~~~~~~~~~")
-                        break
+        for rho in rho_list:
+
+            for C in C_list:
+                print("!!!!!")
+                print("Parameters set as: rho = {0}, B = {1}, C = {2}.".format(str(rho), str(B), str(C)))
+                print("!!!!!")
+                lambda1 = rho * lambda2
+                low_bound = 0
+                # To speed up the process, we usually set up bound to 20, which is bigger than most max q, instead of
+                # the possible highest value below.
+                up_bound = 20
+                #  up_bound = (pos_count + lambda1 * n) / lambda2
+
+                accelerate_flag = True
+                while True:
+                    # peeling with edge = pos - q * neg, and find if there exist a subgraph whose density > q * lambda2 - lambda1
+                    # first build fib heap based on q
+                    if accelerate_flag:
+                        q = low_bound + (up_bound - low_bound) / 2
                     else:
-                        lowbound = q
-                else:
-                    upbound = q
+                        q = (up_bound + low_bound) / 2
+                    node_dict_q = {}
+                    total_C_degree = 0
+                    total_positive_degree = 0
+                    fib_heap = FibonacciHeap()
+                    for node in node_dict.keys():
+                        node_dict_q[node] = SimpleNode()
+                        for neighbor in node_dict[node].neighbor_dict.keys():
+                            C_temp_degree_each = 0
+                            positive_degree_each = 0
+                            # here we already store disabled interactions as negative values
+                            C_temp_degree_each += B * q * node_dict[node].neighbor_dict[neighbor][1]
+                            C_temp_degree_each += C * node_dict[node].neighbor_dict[neighbor][0]
+                            positive_degree_each += node_dict[node].neighbor_dict[neighbor][0]
+                            node_dict_q[node].increase_neighbor(neighbor, C_temp_degree_each, positive_degree_each)
+                            # to avoid influence from loop
+                            if node == neighbor:
+                                total_C_degree += C_temp_degree_each
+                                total_positive_degree += positive_degree_each
+                        node_dict_q[node].fib_node = fib_heap.insert(node_dict_q[node].C_degree, node)
+                        total_C_degree += node_dict_q[node].C_degree
+                        total_positive_degree += node_dict_q[node].positive_degree
+                    total_positive_degree = total_positive_degree / 2
+                    total_C_degree = total_C_degree / 2
+                    exist_flag, C_avg, pos_avg, S_size, subgraph = peeling(node_dict_q, total_C_degree,
+                                                        total_positive_degree, fib_heap, q, B, C, lambda1, lambda2)
+                    print("current q={0}, find subgraph meet constraint={1}, average positive degree = {2}, the size "
+                          "of the subgraph is {3}".format( str(q), str(exist_flag), str(pos_avg), str(S_size)))
+                    if exist_flag:
+                        if accelerate_flag:
+                            accelerate_flag = False
+                        if q - low_bound < precision and up_bound - q < precision:
+                            weight = pos_avg
+                            risk = (C*pos_avg - C_avg)/(B*q)
 
-    print(result)
+                            print("~~~~~~~~~~~~~")
+                            print(
+                                "rho, C, result q, corresponding (max density)subgraph's size, density, average risk:")
+                            print(rho, C, q, S_size, weight, risk)
+                            print("~~~~~~~~~~~~~")
+
+                            result['size'][C][rho][B] = S_size
+                            result['risk'][C][rho][B] = risk
+                            result['weight'][C][rho][B] = weight
+                            result['subgraph'][C][rho][B] = subgraph
+                            break
+                        else:
+                            low_bound = q
+                    else:
+                        up_bound = q
+
+    return result['weight'], result['risk'], result['size'], result['subgraph']
 
 
 if __name__ == "__main__":
-    risk_averse_peel()
+    uncertain_file = input('Enter the uncertain graph name(tmdb/dblp/ppi/reidc): ')
+    file_path = input('Enter the file path(default if you input nothing): ')
+    if len(file_path) == 0:
+        file_path = '../datasets/tmdb/tmdb_2017.json'
+
+    node_dict = {}
+    # peeling preprocess for Tmdb
+    if uncertain_file == 'tmdb':
+        node_dict = process_tmdb_file(file_path)
+
+    # peeling preprocess for DBLP
+    elif uncertain_file == 'dblp':
+        node_dict = process_dblp_file(file_path)
+
+    # peeling preprocess for PPI datasets
+    elif uncertain_file == 'ppi':
+        node_dict = process_PPI_file(file_path)
+
+    # peeling preprocess for PPI datasets
+    elif uncertain_file == 'reidc':
+        node_dict = process_ReIDC_file(file_path)
+
+    else:
+        assert Exception('uncertain dataset file type not expected!')
+
+    B_list = [0.5, 1, 2, 5]
+    C_list = [1]
+    rho_list = [0.5, 1, 2, 5]
+    weight, risk, size, subgraphs = risk_averse_peel(node_dict, C_list, rho_list, B_list)
+    print('Average weight dictionary with indices as parameters C, rho and B.')
+    print(weight)
+    print('Average risk dictionary with indices as parameters C, rho and B.')
+    print(risk)
+    print('Subgraph size dictionary with indices as parameters C, rho and B.')
+    print(size)
+    print('Result subgraph dictionary with indices as parameters C, rho and B. (only subgraph with less than 30 nodes)')
+    print(subgraphs)
