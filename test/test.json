@@ -1,0 +1,4 @@
+[{"nodes": ["a", "b"], "weight": 2, "possibility": 0.1},
+  {"nodes": ["a", "c"], "weight": 1, "possibility": 0.2},
+  {"nodes": ["b", "c"], "weight": 1, "possibility": 0.2},
+  {"nodes": ["b", "d"], "weight": 2, "possibility": 0.3}]
